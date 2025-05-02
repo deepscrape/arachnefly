@@ -36,6 +36,8 @@ func FireAuthMiddleware(firebaseAuth *auth.Client) fiber.Handler {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
 
+		// log.Printf("INFO: Authenticated user %s for request %s %s", userID, c.Method(), c.Path())
+
 		c.Locals("user", decodedToken)
 		return c.Next()
 	}
