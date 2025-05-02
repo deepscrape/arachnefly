@@ -35,8 +35,9 @@ Deploy4Scrap is a Go Fiber API that automates deploying, scaling, and managing F
 
 | Method | Endpoint                | Description             |
 | ------ | ----------------------- | ----------------------- |
-| POST   | `/deploy`               | Deploy a new machine    |
+| POST   | `/deploy?`              | Deploy a new machine    |
 |        | `clone=true&master_id=` | query                   |
+|        | `&region=`              |                         |
 | PUT    | `/machine/:id/start`    | Start a machine         |
 | PUT    | `/machine/:id/stop`     | Stop a machine          |
 | DELETE | `/machine/:id`          | Delete a machine        |

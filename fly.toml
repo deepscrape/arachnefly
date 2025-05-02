@@ -11,23 +11,15 @@ dockerfile = 'Dockerfile'
 
 [env]
 FILE_FIREBASE_CREDENTIALS = 'libnet-d76db-949683c2222d.json'
-FLY_APP = 'deepcrawlqueue'
+FLY_APP = 'crawler4ai'
 PORT = '8080'
 SERVER_ADRESS = '0.0.0.0'
 
 # [http_response]
-# protocol = 'tcp'
-# # force_https = true
-# internal_port = 8080
-# auto_stop_machines = 'stop'
-# auto_start_machines = true
-# min_machines_running = 0
-# processes = ['app']
-
 [[services]]
 protocol = 'tcp'
-internal_port = 8080
 # force_https = true
+internal_port = 8080
 auto_stop_machines = 'stop'
 auto_start_machines = true
 min_machines_running = 0
@@ -42,30 +34,35 @@ port = 443
 handlers = ['tls', 'http']
 
 [services.concurrency]
-type = 'connections' # Scale based on concurrent connections
-hard_limit = 200     # Max connections per Machine before rejection
-soft_limit = 150     # Target connections before routing to other Machines
-
-[[services]]
-protocol = 'tcp'
-internal_port = 9090
-
-[[services.ports]]
-port = 9090
-handlers = ['http']
-
-[services.concurrency]
 type = "connections"
-hard_limit = 25
 soft_limit = 20
+hard_limit = 25
+# type = 'connections' # Scale based on concurrent connections
+# hard_limit = 120     # Max connections per Machine before rejection
+# soft_limit = 100     # Target connections before routing to other Machines
+
+# [[services]]
+# protocol = 'tcp'
+# internal_port = 9090
+
+# [[services.ports]]
+# port = 9090
+# handlers = ['http']
+
+# [services.concurrency]
+# type = "connections"
+# hard_limit = 25
+# soft_limit = 20
 
 [[vm]]
+# size = 'shared-cpu-1x'
 memory = "512mb"
 cpu_kind = 'shared'
 cpus = 2
+# gpus = 1
+# gpu_kind = "a10"
 
 
-[[metrics]]
-port = 9090
+[metrics]
+port = 8080
 path = '/metrics'
-https = false

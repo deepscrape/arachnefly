@@ -1,5 +1,5 @@
 # First stage: Build the Go binary
-FROM golang:1.24.1-alpine AS builder
+FROM golang:1.24.2-alpine AS builder
 
 # Add Maintainer Info
 LABEL maintainer="Prokopis Antoniadis prokopis123@gmail.com"
@@ -27,13 +27,16 @@ RUN go build -a -installsuffix cgo -o main ./main.go
 ###############Application Image################
 # Second stage: Run the binary in a minimal image
 # Run stage
-FROM alpine:latest as release
+FROM alpine:latest AS release
 
 
 WORKDIR /app
 
 # Copy the binary from the builder stage
 # COPY --from=builder /app/.env .env
+COPY --from=builder /app/assets assets
+COPY --from=builder /app/views views
+COPY --from=builder /app/favicon.ico favicon.ico
 COPY --from=builder /app/main /app/main
 
 # Add packages
