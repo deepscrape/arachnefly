@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/AntoniadisCorp/deploy4scrap/domain"
+	"github.com/deepscrape/arachnefly/domain"
 	"github.com/gofiber/fiber/v2"
 )
 

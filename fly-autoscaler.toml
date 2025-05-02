@@ -1,10 +1,10 @@
-app = "deploy4scrap-autoscaler"
+app = "arachnefly-autoscaler"
 
 [build]
 image = "flyio/fly-autoscaler:0.3"
 
 [env]
-FAS_APP_NAME = "deploy4scrap"
+FAS_APP_NAME = "arachnefly"
 FAS_PROMETHEUS_ADDRESS = "https://api.fly.io/prometheus/prokopis123-gmail-com/"
 FAS_REGIONS = "iad,syd,ams,nrt" # "ord,iad,dfw,gru,bog,syd,fra,ams,cdg,nrt,sin,bom"
 FAS_PROMETHEUS_METRIC_NAME = "avg_duration"

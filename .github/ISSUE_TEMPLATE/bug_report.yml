@@ -1,13 +1,13 @@
 name: Bug Report
-description: Report a bug with the deploy4scrap.
+description: Report a bug with the arachnefly.
 title: "[Bug]: "
 labels: ["🐞 Bug","🩺 Needs Triage"]
 body:
   - type: input
     id: crawl4ai_version
     attributes:
-      label: deploy4scrap version
-      description: Specify the version of deploy4scrap you are using.
+      label: arachnefly version
+      description: Specify the version of arachnefly you are using.
       placeholder: "e.g., 2.0.0"
     validations:
       required: true

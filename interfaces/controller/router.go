@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	firebase "firebase.google.com/go"
-	"github.com/AntoniadisCorp/deploy4scrap/domain"
-	"github.com/AntoniadisCorp/deploy4scrap/interfaces/handlers"
 	"github.com/ansrivas/fiberprometheus/v2"
+	"github.com/deepscrape/arachnefly/domain"
+	"github.com/deepscrape/arachnefly/interfaces/handlers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/gofiber/fiber/v2/middleware/favicon"
@@ -20,7 +20,7 @@ import (
 )
 
 func Welcome(c *fiber.Ctx) error {
-	return c.SendString("Welcome to the Deploy4Scrap API!")
+	return c.SendString("Welcome to the arachnefly API!")
 }
 
 func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, FirebaseApp *firebase.App) {
@@ -61,7 +61,7 @@ func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, Firebase
 	}))
 
 	// Initialize Prometheus
-	prometheus := fiberprometheus.New("Deploy4Scrap")
+	prometheus := fiberprometheus.New("arachnefly")
 	prometheus.RegisterAt(app, "/metrics")
 	// prometheus.SetSkipPaths([]string{"/ping"}) // Optional: Remove some paths from metrics
 
@@ -85,7 +85,7 @@ func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, Firebase
 	app.Get("/", Welcome)
 
 	// Start Metrics server
-	app.Get("/metricsgraph", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
+	app.Get("/metricsgraph", monitor.New(monitor.Config{Title: "arachnefly Metrics Page"}))
 
 	// Create a group for authenticated routes
 	authedApp := app.Group("/api", midlwrFireAuth)

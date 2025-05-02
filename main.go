@@ -12,8 +12,8 @@ import (
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
-	router "github.com/AntoniadisCorp/deploy4scrap/interfaces/controller"
-	"github.com/AntoniadisCorp/deploy4scrap/interfaces/handlers"
+	router "github.com/deepscrape/arachnefly/interfaces/controller"
+	"github.com/deepscrape/arachnefly/interfaces/handlers"
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
@@ -149,9 +149,9 @@ func main() {
 	// 	// }
 	// }()
 
-	// Start deploy4scrap MicroService
+	// Start arachnefly MicroService
 	go func() {
-		log.Println("Starting deploy4scrap microservice on", os.Getenv("PORT"))
+		log.Println("Starting arachnefly microservice on", os.Getenv("PORT"))
 		if err := app.Listen(":" + os.Getenv("PORT")); err != nil {
 			log.Fatal(err)
 		}
@@ -166,7 +166,7 @@ func main() {
 		log.Fatal("Failed to shutdown server", zap.Error(err))
 	}
 
-	log.Println("deploy4scrap MicroService gracefully stopped")
+	log.Println("arachnefly MicroService gracefully stopped")
 
 	// Wait for an interrupt signal
 	<-sigCh

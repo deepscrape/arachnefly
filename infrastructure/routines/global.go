@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/AntoniadisCorp/deploy4scrap/domain"
+	"github.com/deepscrape/arachnefly/domain"
 	"github.com/goccy/go-json"
 
 	"github.com/valyala/fasthttp"
