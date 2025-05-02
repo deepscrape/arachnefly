@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/AntoniadisCorp/deploy4scrap/domain"
-	"github.com/AntoniadisCorp/deploy4scrap/domain/routine"
-	"github.com/AntoniadisCorp/deploy4scrap/infrastructure/routines"
+	"github.com/deepscrape/arachnefly/domain"
+	"github.com/deepscrape/arachnefly/domain/routine"
+	"github.com/deepscrape/arachnefly/infrastructure/routines"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/proxy"
 	machines "github.com/sosedoff/fly-machines"

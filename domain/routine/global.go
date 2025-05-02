@@ -3,7 +3,7 @@ package routine
 import (
 	"time"
 
-	"github.com/AntoniadisCorp/deploy4scrap/domain"
+	"github.com/deepscrape/arachnefly/domain"
 )
 
 type IGlobal interface {

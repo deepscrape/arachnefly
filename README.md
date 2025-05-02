@@ -1,6 +1,6 @@
 # Deploy Containers 4 Scrap
 
-Deploy4Scrap is a Go Fiber API that automates deploying, scaling, and managing Fly.io machines using API requests. It supports Firebase JWT authentication and integrates with Prometheus for auto-scaling based on metrics.
+arachnefly is a Go Fiber API that automates deploying, scaling, and managing Fly.io machines using API requests. It supports Firebase JWT authentication and integrates with Prometheus for auto-scaling based on metrics.
 
 ## Features
 
@@ -15,8 +15,8 @@ Deploy4Scrap is a Go Fiber API that automates deploying, scaling, and managing F
 
 1. **Clone the Repository**
    ```sh
-   git clone https://github.com/AntoniadisCorp/deploy4scrap.git
-   cd deploy4scrap
+   git clone https://github.com/deepscrape/arachnefly.git
+   cd arachnefly
    ```
 2. **Set Up Environment Variables**
    ```sh

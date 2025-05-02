@@ -1,4 +1,4 @@
-module github.com/AntoniadisCorp/deploy4scrap
+module github.com/deepscrape/arachnefly
 
 go 1.23.1
 
