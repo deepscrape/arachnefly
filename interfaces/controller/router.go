@@ -90,11 +90,20 @@ func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, Firebase
 	// Create a group for authenticated routes
 	authedApp := app.Group("/api", midlwrFireAuth)
 
+	// Routes that require authentication
+	// LookupIP to get the machine IP
+
+	authedApp.Get("/machine/:id", MakeFiberCallback(fireAuthHandler.GetMachine))
+
+	authedApp.Get("/machine/proxy/:id", MakeFiberCallback(fireAuthHandler.HandleContainerProxyFiber))
+
 	authedApp.Post("/deploy", MakeFiberCallback(fireAuthHandler.DeployMachine))
+	authedApp.Post("/execute-task/:machine_id", MakeFiberCallback(fireAuthHandler.ExecuteTask))
+
 	authedApp.Put("/machine/:id/start", MakeFiberCallback(fireAuthHandler.StartMachine))
 	authedApp.Put("/machine/:id/stop", MakeFiberCallback(fireAuthHandler.StopMachine))
+
 	authedApp.Delete("/machine/:id", MakeFiberCallback(fireAuthHandler.DeleteMachine))
-	// authedApp.Post("/execute-task/:machine_id", executeTask)
 
 }
 

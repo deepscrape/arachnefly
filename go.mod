@@ -89,6 +89,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sacsand/gofiber-firebaseauth v1.4.3
+	github.com/sosedoff/fly-machines v0.0.0-20230525045457-0d1f4485cb4f
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.59.0
 	go.uber.org/zap v1.27.0

@@ -53,7 +53,6 @@ func init() {
 	var options []option.ClientOption
 
 	options = append(options, option.WithCredentialsFile(flyFirebaseCreds))
-
 	FirebaseApp, err = firebase.NewApp(ctx, nil, options...)
 	if err != nil {
 		log.Fatalf("Firebase initialization error: %v", err)
@@ -106,7 +105,7 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		Prefork: true, // Enable prefork mode for better performance
-		// Concurrency:    100,  // Set the desired concurrency level
+		// Concurrency:    256 * 1024, // Set the desired concurrency level
 		JSONEncoder:    json.Marshal,
 		JSONDecoder:    json.Unmarshal,
 		ReadTimeout:    15 * time.Second,
