@@ -6,7 +6,7 @@ import (
 )
 
 // This function wraps a controller and formats its response for Fiber
-func MakeFiberCallback(controller func(*fiber.Ctx) (*domain.HTTPResponse, error)) fiber.Handler {
+func MakeAPICallback(controller func(*fiber.Ctx) (*domain.HTTPResponse, error)) fiber.Handler {
 
 	return func(c *fiber.Ctx) error {
 		// Call the controller function
@@ -37,7 +37,7 @@ func MakeFiberCallback(controller func(*fiber.Ctx) (*domain.HTTPResponse, error)
 	}
 }
 
-func MakeServerCallback(controller func(*fiber.Ctx) (*domain.HTTPResponse, error)) fiber.Handler {
+func MakeServerInternalCallback(controller func(*fiber.Ctx) (*domain.HTTPResponse, error)) fiber.Handler {
 
 	// tracer := otel.GetTracerProvider().Tracer("auth.cookto.online/")
 

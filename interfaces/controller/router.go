@@ -92,18 +92,17 @@ func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, Firebase
 
 	// Routes that require authentication
 	// LookupIP to get the machine IP
+	authedApp.Get("/machine/:id", MakeAPICallback(fireAuthHandler.GetMachine))
+	authedApp.Get("/machine/proxy/:id", MakeAPICallback(fireAuthHandler.HandleContainerProxyFiber))
+	authedApp.Get("/check-image", MakeAPICallback(fireAuthHandler.ParseImageHandler))
 
-	authedApp.Get("/machine/:id", MakeFiberCallback(fireAuthHandler.GetMachine))
+	authedApp.Post("/deploy", MakeAPICallback(fireAuthHandler.DeployMachine))
+	authedApp.Post("/execute-task/:machine_id", MakeAPICallback(fireAuthHandler.ExecuteTask))
 
-	authedApp.Get("/machine/proxy/:id", MakeFiberCallback(fireAuthHandler.HandleContainerProxyFiber))
+	authedApp.Put("/machine/:id/start", MakeAPICallback(fireAuthHandler.StartMachine))
+	authedApp.Put("/machine/:id/stop", MakeAPICallback(fireAuthHandler.StopMachine))
 
-	authedApp.Post("/deploy", MakeFiberCallback(fireAuthHandler.DeployMachine))
-	authedApp.Post("/execute-task/:machine_id", MakeFiberCallback(fireAuthHandler.ExecuteTask))
-
-	authedApp.Put("/machine/:id/start", MakeFiberCallback(fireAuthHandler.StartMachine))
-	authedApp.Put("/machine/:id/stop", MakeFiberCallback(fireAuthHandler.StopMachine))
-
-	authedApp.Delete("/machine/:id", MakeFiberCallback(fireAuthHandler.DeleteMachine))
+	authedApp.Delete("/machine/:id", MakeAPICallback(fireAuthHandler.DeleteMachine))
 
 }
 
@@ -129,7 +128,7 @@ func StatusNotFound(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 }
 
 func SetupNonAccessibleRoutes(app *fiber.App) {
-	app.Get("/"+strconv.Itoa(fiber.StatusNotFound), MakeServerCallback(StatusNotFound))
+	app.Get("/"+strconv.Itoa(fiber.StatusNotFound), MakeServerInternalCallback(StatusNotFound))
 }
 
 func handleStatusNotFoundFailure() func(c *fiber.Ctx) error {

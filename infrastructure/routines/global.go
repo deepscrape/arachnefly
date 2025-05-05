@@ -98,7 +98,8 @@ func (h *Global) BuildConfigMap(machineConfig domain.MachineConfig) map[string]i
 		return nil
 	}
 
-	// Build the config map
+	// 🚀 Build the config map
+	// 🔗 https://fly.io/docs/machines/api/machines-resource/#get-a-machines-metadata
 	config := map[string]interface{}{
 		"name":   machineConfig.MachineName, // Use the machine name from the request, should be a unique name
 		"region": machineConfig.Region,
@@ -126,8 +127,9 @@ func (h *Global) BuildConfigMap(machineConfig domain.MachineConfig) map[string]i
 					},
 					"ports": []map[string]interface{}{
 						{
-							"port":     80,
-							"handlers": []string{"http"},
+							"port":        80,
+							"handlers":    []string{"http"},
+							"force_https": true,
 						},
 						{
 							"port":     port,
@@ -158,6 +160,9 @@ func (h *Global) BuildConfigMap(machineConfig domain.MachineConfig) map[string]i
 					},
 				},
 			},
+		},
+		"processes": []map[string]interface{}{
+			{"entrypoint": []string{"app"}},
 		},
 		"checks": map[string]interface{}{
 			"httpget": map[string]interface{}{
@@ -201,4 +206,14 @@ func (h *Global) GetImageSource(imageOption string, machineConfig domain.Machine
 	default:
 		return "", fmt.Errorf("invalid image option: %s", imageOption)
 	}
+}
+
+func (h *Global) RemoveURLScheme(input string) string {
+	if len(input) >= 8 && input[:8] == "https://" {
+		return input[8:]
+	}
+	if len(input) >= 7 && input[:7] == "http://" {
+		return input[7:]
+	}
+	return input
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/deepscrape/arachnefly/domain"
@@ -14,6 +15,8 @@ import (
 	"github.com/deepscrape/arachnefly/infrastructure/routines"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/proxy"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	machines "github.com/sosedoff/fly-machines"
 )
 
@@ -591,6 +594,123 @@ func (h *AuthHandler) HandleContainerProxyFiber(c *fiber.Ctx) (*domain.HTTPRespo
 	}
 	// If proxy.Do returns nil, the response has already been written to c.Response()
 	return &response, nil // Indicate successful handling by the proxy
+}
+
+// parseImageHandler handles the parsing of a Docker image name from a URL parameter.
+// It expects the image name to be provided in the 'name' query parameter.
+//
+// Example usage:
+//
+//	/parseImage?imageName=docker.io/library/nginx:latest
+func (h *AuthHandler) ParseImageHandler(c *fiber.Ctx) (*domain.HTTPResponse, error) {
+
+	var response domain.HTTPResponse
+	// 1. Get the 'name' query parameter from the URL.
+	imageName := c.Query("name")
+
+	// 2. Validate the 'imageName' parameter.
+	if imageName == "" {
+		response = domain.HTTPResponse{
+			Code:    fiber.StatusBadRequest,
+			Status:  "error",
+			Message: "Invalid imageName parameter is required",
+			Errors:  domain.APIError{Code: "InvalidImageName", Message: "Image name is required"},
+			Data:    fiber.Map{"status": false},
+		}
+
+		return &response, nil
+	}
+
+	// 3. Log the received image name for debugging.
+	log.Printf("Received imageName: %s\n", imageName)
+
+	// 4. URL-decode the imageName in case it contains special characters.
+	imageInput, err := url.QueryUnescape(imageName)
+
+	if err != nil {
+		response = domain.HTTPResponse{
+			Code:    fiber.StatusBadRequest,
+			Status:  "error",
+			Message: fmt.Sprintf("Error decoding imageName: %v", err),
+			Errors:  domain.APIError{Code: "InvalidImageName", Message: fmt.Sprintf("Error decoding imageName: %v", err)},
+			Data:    fiber.Map{"status": false},
+		}
+
+		return &response, nil
+	}
+
+	// Remove any URL scheme if present
+	decodedImageName := h.globalRoutines.RemoveURLScheme(imageInput)
+
+	// 5. Parse the decoded image name using `name.ParseReference`.
+	ref, err := name.ParseReference(decodedImageName, name.WeakValidation) //Added WeakValidation
+
+	if err != nil {
+		response = domain.HTTPResponse{
+			Code:    fiber.StatusBadRequest,
+			Status:  "error",
+			Message: fmt.Sprintf("Error parsing image name: %v", err),
+			Errors:  domain.APIError{Code: "InvalidParse", Message: fmt.Sprintf("Error parsing image name: %v", err)},
+			Data:    fiber.Map{"status": false},
+		}
+		return &response, nil
+	}
+
+	// 7. Log the successful parsing.
+	log.Printf("Parsed image name: %s\n", decodedImageName)
+
+	// 8. Extract the relevant components from the parsed reference.
+	registry := ref.Context().RegistryStr()
+	repository := ref.Context().RepositoryStr()
+
+	tag := ""
+	digest := ""
+
+	if t, ok := ref.(name.Tag); ok {
+		tag = t.TagStr()
+	}
+	if d, ok := ref.(name.Digest); ok {
+		digest = d.DigestStr()
+	}
+
+	// 9. Check if the repository exists on the registry.
+	repoExists := false
+	if registry != "" && repository != "" {
+		// Attempt to get the repository.
+		_, err := remote.Head(ref) // Use remote.Head
+		if err != nil {
+			if strings.Contains(err.Error(), "404 Not Found") {
+				repoExists = false
+				log.Printf("Repository %s does not exist on registry %s\n", repository, registry)
+			} else {
+				log.Printf("Error checking repository existence: %v\n", err)
+				repoExists = false // important: default to false
+			}
+
+		} else {
+			repoExists = true
+			log.Printf("Repository %s exists on registry %s\n", repository, registry)
+		}
+	}
+
+	// 10. Construct a JSON-like response string (for simplicity).
+	dataStr := map[string]interface{}{
+		"originalImageName": decodedImageName,
+		"fullName":          ref.Name(),
+		"registry":          registry,
+		"repository":        repository,
+		"tag":               tag,
+		"digest":            digest,
+	}
+
+	response = domain.HTTPResponse{
+		Code:    fiber.StatusOK,
+		Status:  "success",
+		Message: "Image metadata retrieved successfully",
+		Data:    fiber.Map{"status": true, "info": dataStr, "exists": repoExists},
+	}
+	return &response, nil
+
 }
 
 func machineIdRequired() domain.HTTPResponse {

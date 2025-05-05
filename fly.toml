@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for arachnefly on 2025-04-01T17:42:29+03:00
+# fly.toml app configuration file generated for arachnefly on 2025-05-02T16:15:17+03:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -15,10 +15,8 @@ FLY_APP = 'crawler4ai'
 PORT = '8080'
 SERVER_ADRESS = '0.0.0.0'
 
-# [http_response]
 [[services]]
 protocol = 'tcp'
-# force_https = true
 internal_port = 8080
 auto_stop_machines = 'stop'
 auto_start_machines = true
@@ -28,18 +26,16 @@ processes = ['app']
 [[services.ports]]
 port = 80
 handlers = ['http']
+force_https = true
 
 [[services.ports]]
 port = 443
 handlers = ['tls', 'http']
 
 [services.concurrency]
-type = "connections"
-soft_limit = 20
-hard_limit = 25
-# type = 'connections' # Scale based on concurrent connections
-# hard_limit = 120     # Max connections per Machine before rejection
-# soft_limit = 100     # Target connections before routing to other Machines
+type = 'connections' # Scale based on concurrent connections
+hard_limit = 25      # Max connections per Machine before rejection
+soft_limit = 20      # Target connections before routing to other Machines
 
 # [[services]]
 # protocol = 'tcp'
@@ -55,14 +51,11 @@ hard_limit = 25
 # soft_limit = 20
 
 [[vm]]
-# size = 'shared-cpu-1x'
-memory = "512mb"
+memory = '512mb'
 cpu_kind = 'shared'
 cpus = 2
-# gpus = 1
-# gpu_kind = "a10"
 
-
-[metrics]
+[[metrics]]
 port = 8080
 path = '/metrics'
+https = false

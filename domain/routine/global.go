@@ -13,4 +13,5 @@ type IGlobal interface {
 	BuildConfigMap(machineConfig domain.MachineConfig) map[string]interface{}
 	BuildEnvVars(environmentVariables []map[string]interface{}) map[string]interface{}
 	GetImageSource(imageOption string, machineConfig domain.MachineConfig) (string, error)
+	RemoveURLScheme(input string) string
 }
