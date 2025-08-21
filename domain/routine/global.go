@@ -8,10 +8,12 @@ import (
 
 type IGlobal interface {
 	GetCurrentTime() time.Time
+	GetCurrentTimeRFC() string
 	GetMachineDetails(machineId, flyApiUrl, flyApp string) (map[string]interface{}, error)
-	FlyRequest(method string, url string, body interface{}, headers map[string]string) (map[string]interface{}, error)
-	BuildConfigMap(machineConfig domain.MachineConfig) map[string]interface{}
+	FlyRequest(method string, url string, body interface{}, headers map[string]string, params map[string]string) (map[string]interface{}, error)
+	BuildConfigMap(machineConfig *domain.MachineConfig) map[string]interface{}
 	BuildEnvVars(environmentVariables []map[string]interface{}) map[string]interface{}
-	GetImageSource(imageOption string, machineConfig domain.MachineConfig) (string, error)
+	GetImageSource(imageOption string, machineConfig *domain.MachineConfig) (string, error)
 	RemoveURLScheme(input string) string
+	DecodeImageName(input string) (string, error)
 }

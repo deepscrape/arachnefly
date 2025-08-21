@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"firebase.google.com/go/auth"
+	"firebase.google.com/go/v4/auth"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -38,7 +38,7 @@ func FireAuthMiddleware(firebaseAuth *auth.Client) fiber.Handler {
 
 		// log.Printf("INFO: Authenticated user %s for request %s %s", userID, c.Method(), c.Path())
 
-		c.Locals("user", decodedToken)
+		c.Locals("userID", decodedToken.UID)
 		return c.Next()
 	}
 }

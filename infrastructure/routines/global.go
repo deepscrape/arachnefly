@@ -3,6 +3,7 @@ package routines
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -27,15 +28,19 @@ func (g *Global) GetCurrentTime() time.Time {
 	return time.Now()
 }
 
+func (g *Global) GetCurrentTimeRFC() string {
+	return time.Now().UTC().Format(time.RFC3339)
+}
+
 // 🚀 Get Machine IP
 func (g *Global) GetMachineDetails(machineId, flyApiUrl, flyApp string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/apps/%s/machines/%s", flyApiUrl, flyApp, machineId)
 	log.Println("Get Machine url:", url)
-	return g.FlyRequest("GET", url, nil, nil)
+	return g.FlyRequest("GET", url, nil, nil, nil)
 }
 
 // 🚀 Helper Function for Fly.io API Requests
-func (g *Global) FlyRequest(method string, url string, body interface{}, headers map[string]string) (map[string]interface{}, error) {
+func (g *Global) FlyRequest(method string, url string, body interface{}, headers map[string]string, params map[string]string) (map[string]interface{}, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	res := fasthttp.AcquireResponse()
@@ -50,8 +55,18 @@ func (g *Global) FlyRequest(method string, url string, body interface{}, headers
 		req.Header.Set(key, value)
 	}
 
+	// Construct URL with query parameters
+	uri := url
+	if len(params) > 0 {
+		q := req.URI().QueryArgs()
+		for key, value := range params {
+			q.Add(key, value)
+		}
+		uri = url + "?" + q.String()
+	}
+
 	// Add URL to the request
-	req.SetRequestURI(url)
+	req.SetRequestURI(uri)
 
 	if body != nil {
 		jsonBody, _ := json.Marshal(body)
@@ -73,7 +88,7 @@ func (g *Global) FlyRequest(method string, url string, body interface{}, headers
 	return responseData, nil
 }
 
-func (h *Global) BuildConfigMap(machineConfig domain.MachineConfig) map[string]interface{} {
+func (h *Global) BuildConfigMap(machineConfig *domain.MachineConfig) map[string]interface{} {
 
 	// Unmarshal the EnvironmentVariables JSON string into a slice of maps
 	var envVars []map[string]interface{}
@@ -191,14 +206,14 @@ func (h *Global) BuildEnvVars(environmentVariables []map[string]interface{}) map
 	return env
 }
 
-func (h *Global) GetImageSource(imageOption string, machineConfig domain.MachineConfig) (string, error) {
+func (h *Global) GetImageSource(imageOption string, machineConfig *domain.MachineConfig) (string, error) {
 	switch imageOption {
 	case "default":
 		return machineConfig.DefaultImage, nil
 	case "clone":
 		return machineConfig.CloneMachine, nil
 	case "url":
-		return machineConfig.DockerHubUrl, nil
+		return h.DecodeImageName(machineConfig.DockerHubUrl)
 	case "upload":
 		// Assuming the image is already uploaded and the URL is available in machineConfig.UploadURL
 		// Or handle the upload logic here if it's not already handled.
@@ -216,4 +231,20 @@ func (h *Global) RemoveURLScheme(input string) string {
 		return input[7:]
 	}
 	return input
+}
+
+func (h *Global) DecodeImageName(input string) (string, error) {
+	// 4. URL-decode the imageName in case it contains special characters.
+	imageInput, err := url.QueryUnescape(input)
+
+	if err != nil {
+		log.Printf("Error decoding imageName: %v", err)
+		return "", fmt.Errorf("%v", err)
+	}
+
+	// Remove any URL scheme if present
+	decodedImageName := h.RemoveURLScheme(imageInput)
+
+	return decodedImageName, nil
+
 }

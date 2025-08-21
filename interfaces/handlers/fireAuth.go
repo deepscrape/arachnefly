@@ -10,9 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/deepscrape/arachnefly/domain"
 	"github.com/deepscrape/arachnefly/domain/routine"
 	"github.com/deepscrape/arachnefly/infrastructure/routines"
+	"github.com/deepscrape/arachnefly/interfaces/repository"
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/proxy"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -42,19 +45,76 @@ type AuthHandler struct {
 
 	// cfg    *config.Config
 	// logger *zap.Logger
-	flyApp    string
-	flyApiUrl string
+	firebaseRepo domain.IFirestore
+	flyApp       string
+	flyApiUrl    string
 }
 
-func NewHandlers(flyApiToken, flyApiUrl, flyApp string) *AuthHandler {
+func NewHandlers(firestoreRepo *repository.Firestore, flyApiToken, flyApiUrl, flyApp string) *AuthHandler {
 
 	return &AuthHandler{
+		firebaseRepo:   firestoreRepo,
 		globalRoutines: routines.NewGlobalRoutines(flyApiToken),
 		flyApp:         flyApp,
 		flyApiUrl:      flyApiUrl,
 		// cfg:                        cfg,
 		// logger:                     logger,
 	}
+}
+
+// 🚀 Check or Create Fly App
+func (h *AuthHandler) CheckOrCreateApp(c *fiber.Ctx) error {
+	appName := h.flyApp
+	// var response domain.HTTPResponse
+
+	/* if appName == "" {
+		response = domain.HTTPResponse{
+			Code:    fiber.StatusBadRequest,
+			Status:  "error",
+			Message: "App name is required",
+			Errors:  domain.APIError{Code: "AppNameRequired", Message: "App name is required"},
+			Data:    fiber.Map{"status": false},
+		}
+		return
+	} */
+
+	// Check if the app exists
+	app, err := h.globalRoutines.FlyRequest("GET", fmt.Sprintf("%s/apps/%s", h.flyApiUrl, h.flyApp), nil, nil, nil)
+	if err != nil {
+
+		return &fiber.Error{Code: fiber.StatusInternalServerError, Message: fmt.Sprintf("Failed to fetch apps from Fly.io %s", err.Error())}
+	}
+
+	// Check if the app name exists in the list
+	if app["name"] == appName {
+		log.Printf("App already exists: %s", app["name"])
+		return c.Next()
+	}
+
+	if app["error"] != nil && app["error"] != "" {
+		log.Println("App:", app["error"])
+		// App does not exist, create a new app
+		appConfig := map[string]interface{}{
+			"app_name":          appName,
+			"org_slug":          "softmind",
+			"enable_subdomains": true,
+			"network":           "dedicated",
+		}
+
+		newApp, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps", h.flyApiUrl), appConfig, nil, nil)
+		if err != nil {
+			return &fiber.Error{Code: fiber.StatusInternalServerError, Message: fmt.Sprintf("Failed to create app on Fly.io: %s", err.Error())}
+		}
+
+		// return &response, nil
+		if newApp["error"] != nil && newApp["error"] != "" {
+
+			return &fiber.Error{Code: fiber.StatusInternalServerError, Message: fmt.Sprintf("Fly.io %s", newApp["error"])}
+		}
+	}
+
+	log.Printf("New App may Created successfully")
+	return c.Next()
 }
 
 func (h *AuthHandler) GetMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
@@ -92,7 +152,7 @@ func (h *AuthHandler) GetMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 			Code:    fiber.StatusInternalServerError,
 			Status:  "error",
 			Message: "Failed to get machine private ip",
-			Errors:  domain.APIError{Code: "GetMachine IP Failed", Message: err.Error()},
+			Errors:  domain.APIError{Code: "GetMachine private IP Failed", Message: fmt.Sprintf("%v", err)},
 			Data:    fiber.Map{"status": false},
 		}
 		return &response, err
@@ -121,9 +181,100 @@ func (h *AuthHandler) GetMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 
 }
 
+func (h *AuthHandler) WaitForState(c *fiber.Ctx) (*domain.HTTPResponse, error) {
+
+	var response domain.HTTPResponse
+	var machineId string = c.Params("id")
+	var state string = c.Query("state")
+	var instance_id string = c.Query("instance_id")
+	var timeout string = c.Query("timeout")
+
+	var userID string = c.Locals("userID").(string)
+
+	params := make(map[string]string)
+
+	log.Println("Wait for Machine state url:", machineId, state)
+
+	if machineId == "" || state == "" || instance_id == "" {
+		response = domain.HTTPResponse{
+			Code:    fiber.StatusBadRequest,
+			Status:  "error",
+			Message: "Machine ID or State is required",
+			Errors:  domain.APIError{Code: "MachineIDRequired or state is required", Message: "Machine ID or State is required"},
+			Data:    fiber.Map{"status": false},
+		}
+		return &response, nil
+	}
+
+	params["state"] = state
+	params["instance_id"] = instance_id
+	if timeout != "" {
+		params["timeout"] = timeout
+	}
+
+	url := fmt.Sprintf("%s/apps/%s/machines/%s/wait", h.flyApiUrl, h.flyApp, machineId)
+
+	log.Println("Wait for Machine state url:", url)
+	machine, err := h.globalRoutines.FlyRequest("GET", url, nil, nil, params)
+	if err != nil {
+		log.Printf("Fly Request Error: %v", err)
+		response = domain.HTTPResponse{
+			// Headers: headers,
+			Code:    fiber.StatusInternalServerError,
+			Status:  "error",
+			Message: "Check the Fly api url or fly app image if exists",
+			Errors:  domain.APIError{Code: "WaitforstateRequestError", Message: err.Error()},
+			Data:    fiber.Map{"status": false},
+		}
+
+		return &response, err
+	}
+
+	if machine["error"] != nil {
+		log.Println("Error:", machine["error"])
+		response = domain.HTTPResponse{
+			// Headers: headers,
+			Code:    fiber.StatusInternalServerError,
+			Status:  "error",
+			Message: "",
+			Errors:  domain.APIError{Code: "WaitforstateError", Message: fmt.Sprintf("%v", machine["error"])},
+			Data:    fiber.Map{"status": false},
+		}
+		return &response, err
+	}
+
+	updates := []firestore.Update{
+		{Path: "state", Value: state},
+		{Path: "updated_at", Value: h.globalRoutines.GetCurrentTime()},
+	}
+
+	err = h.firebaseRepo.UpdateMachine(userID, machineId, updates)
+	if err != nil {
+		log.Printf("Firestore Update Error: %v", err)
+		response = domain.HTTPResponse{
+			// Headers: headers,
+			Code:    fiber.StatusInternalServerError,
+			Status:  "error",
+			Message: "Firestore Update Error",
+			Errors:  domain.APIError{Code: "FirestoreUpdateError", Message: err.Error()},
+			Data:    fiber.Map{"status": false, "message": "Firestore Update Error"},
+		}
+		return &response, err
+	}
+
+	return &domain.HTTPResponse{
+		Code:    fiber.StatusOK,
+		Status:  "success",
+		Message: "Machine state",
+		Data:    fiber.Map{"status": true, "message": "Machine state", "machine": machine},
+	}, nil
+}
+
 // 🚀 Deploy Machine (Clone or New)
 func (h *AuthHandler) DeployMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 
+	var userID string = c.Locals("userID").(string)
+	// log.Println("User ID:", userID)
 	clone := c.Query("clone") == "true"
 	masterId := c.Query("master_id")
 	region := c.Query("region")
@@ -134,7 +285,9 @@ func (h *AuthHandler) DeployMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) 
 	}
 	var config map[string]interface{}
 	var response domain.HTTPResponse
-
+	var deploymentId string = ""
+	var err error
+	var machineConfig *domain.MachineConfig = &domain.MachineConfig{}
 	/* Clone Machine */
 	if clone && masterId != "" {
 		machine, err := h.globalRoutines.GetMachineDetails(masterId, h.flyApiUrl, h.flyApp)
@@ -158,8 +311,8 @@ func (h *AuthHandler) DeployMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) 
 		}
 	} else if !clone {
 		// Parse the incoming JSON data
-		var machineConfig domain.MachineConfig
-		if err := c.BodyParser(&machineConfig); err != nil {
+
+		if err := c.BodyParser(machineConfig); err != nil {
 			response = domain.HTTPResponse{
 				Code:    fiber.StatusBadRequest,
 				Status:  "error",
@@ -171,14 +324,29 @@ func (h *AuthHandler) DeployMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) 
 		}
 
 		// print machineconfig
-		log.Println("MachineConfig:", machineConfig)
+		// log.Println("MachineConfig:", machineConfig)
+
+		// save configuration
+		deploymentId, err = h.firebaseRepo.SaveDeployment(userID, machineConfig)
+		if err != nil {
+			// log.Fatalf("Firestore Error: %v", err)
+			response = domain.HTTPResponse{
+				// Headers: headers,
+				Code:    fiber.StatusInternalServerError,
+				Status:  "error",
+				Message: "Failed to save deployment config in firestore",
+				Errors:  domain.APIError{Code: "Failed to save deployment config in firestore", Message: err.Error()},
+				Data:    fiber.Map{"status": false},
+			}
+			return &response, err
+		}
 
 		config = h.globalRoutines.BuildConfigMap(machineConfig)
 	}
 
 	// This code snippet is handling the deployment of a machine using the `FlyRequest` method from the
 	// `globalRoutines` object. Here's a breakdown of what's happening:
-	machine, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines", h.flyApiUrl, h.flyApp), config, nil)
+	machine, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines", h.flyApiUrl, h.flyApp), config, nil, nil)
 	if err != nil {
 		log.Fatalf("Fly Request Error: %v", err)
 		response = domain.HTTPResponse{
@@ -190,6 +358,21 @@ func (h *AuthHandler) DeployMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) 
 			Data:    fiber.Map{"status": false},
 		}
 
+		return &response, err
+	}
+
+	// save machines's details and metadata to firestore db
+	err = h.firebaseRepo.CreateMachine(userID, machine, deploymentId, machineConfig.Default)
+	if err != nil {
+		log.Fatalf("Firestore Error: %v", err)
+		response = domain.HTTPResponse{
+			// Headers: headers,
+			Code:    fiber.StatusInternalServerError,
+			Status:  "error",
+			Message: "Failed to save machine details to firestore",
+			Errors:  domain.APIError{Code: "Save Machine Details Failed", Message: err.Error()},
+			Data:    fiber.Map{"status": false},
+		}
 		return &response, err
 	}
 
@@ -205,73 +388,18 @@ func (h *AuthHandler) DeployMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) 
 
 }
 
-// 🚀 Check or Create Fly App
-func (h *AuthHandler) CheckOrCreateApp(c *fiber.Ctx) error {
-	appName := h.flyApp
-	// var response domain.HTTPResponse
-
-	/* if appName == "" {
-		response = domain.HTTPResponse{
-			Code:    fiber.StatusBadRequest,
-			Status:  "error",
-			Message: "App name is required",
-			Errors:  domain.APIError{Code: "AppNameRequired", Message: "App name is required"},
-			Data:    fiber.Map{"status": false},
-		}
-		return
-	} */
-
-	// Check if the app exists
-	app, err := h.globalRoutines.FlyRequest("GET", fmt.Sprintf("%s/apps/%s", h.flyApiUrl, h.flyApp), nil, nil)
-	if err != nil {
-
-		return &fiber.Error{Code: fiber.StatusInternalServerError, Message: fmt.Sprintf("Failed to fetch apps from Fly.io %s", err.Error())}
-	}
-
-	// Check if the app name exists in the list
-	if app["name"] == appName {
-		log.Printf("App already exists: %s", app["name"])
-		return c.Next()
-	}
-
-	if app["error"] != nil && app["error"] != "" {
-		log.Println("App:", app["error"])
-		// App does not exist, create a new app
-		appConfig := map[string]interface{}{
-			"app_name":          appName,
-			"org_slug":          "softmind",
-			"enable_subdomains": true,
-			"network":           "dedicated",
-		}
-
-		newApp, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps", h.flyApiUrl), appConfig, nil)
-		if err != nil {
-			return &fiber.Error{Code: fiber.StatusInternalServerError, Message: fmt.Sprintf("Failed to create app on Fly.io: %s", err.Error())}
-		}
-
-		// return &response, nil
-		if newApp["error"] != nil && newApp["error"] != "" {
-
-			return &fiber.Error{Code: fiber.StatusInternalServerError, Message: fmt.Sprintf("Fly.io %s", newApp["error"])}
-		}
-	}
-
-	log.Printf("New App may Created successfully")
-	return c.Next()
-}
-
 // 🚀 Start Machine
 func (h *AuthHandler) StartMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 	machineId := c.Params("id")
 	var response domain.HTTPResponse
 
-	if machineId != "" {
+	if machineId == "" {
 		response = machineIdRequired()
 		return &response, nil
 	}
 
 	// post request to start machine by id
-	_, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/start", h.flyApiUrl, h.flyApp, machineId), nil, nil)
+	_, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/start", h.flyApiUrl, h.flyApp, machineId), nil, nil, nil)
 	if err != nil {
 		response = domain.HTTPResponse{
 			Code:    fiber.StatusInternalServerError,
@@ -292,16 +420,47 @@ func (h *AuthHandler) StartMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 	return &response, nil
 }
 
+func (h *AuthHandler) SuspendMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
+	machineId := c.Params("id")
+	var response domain.HTTPResponse
+	if machineId == "" {
+		response = machineIdRequired()
+		return &response, nil
+	}
+
+	_, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/suspend", h.flyApiUrl, h.flyApp, machineId), nil, nil, nil)
+	if err != nil {
+		response = domain.HTTPResponse{
+			Code:    fiber.StatusInternalServerError,
+			Status:  "error",
+			Message: "Failed to suspend the machine",
+			Errors:  domain.APIError{Code: "suspendMachineError", Message: err.Error()},
+			Data:    fiber.Map{"status": false},
+		}
+		return &response, err
+	}
+
+	response = domain.HTTPResponse{
+		Code:    fiber.StatusOK,
+		Status:  "success",
+		Message: "Machine suspended",
+		Data:    fiber.Map{"status": true, "message": "Machine suspended"},
+	}
+
+	return &response, nil
+
+}
+
 // 🚀 Stop Machine
 func (h *AuthHandler) StopMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 	machineId := c.Params("id")
 	var response domain.HTTPResponse
 
-	if machineId != "" {
+	if machineId == "" {
 		response = machineIdRequired()
 		return &response, nil
 	}
-	_, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/stop", h.flyApiUrl, h.flyApp, machineId), nil, nil)
+	_, err := h.globalRoutines.FlyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/stop", h.flyApiUrl, h.flyApp, machineId), nil, nil, nil)
 	if err != nil {
 		response = domain.HTTPResponse{
 			Code:    fiber.StatusInternalServerError,
@@ -325,23 +484,77 @@ func (h *AuthHandler) StopMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 
 // 🚀 Delete Machine
 func (h *AuthHandler) DeleteMachine(c *fiber.Ctx) (*domain.HTTPResponse, error) {
-	machineId := c.Params("id")
+
+	// Initialize validator
+	validate := routines.GetValidator()
+
+	// Bind parameters to the struct
+	apiData := domain.DeleteMachineParams{
+		MachineID:   c.Params("id"),
+		ForceDelete: c.Query("force"),
+	}
+	// Validate the struct
+	err := validate.Struct(apiData)
+	if err != nil {
+		validationErrors := err.(validator.ValidationErrors)
+		errorMessages := []string{}
+		for _, fieldError := range validationErrors {
+			errorMessages = append(errorMessages, fieldError.Error()) //Customize message if needed
+		}
+		response := domain.HTTPResponse{
+			Code:    fiber.StatusBadRequest,
+			Status:  "error",
+			Message: "Validation Error",
+			Errors:  domain.APIError{Code: "Validation Error", Message: strings.Join(errorMessages, ", ")},
+			Data:    fiber.Map{"status": false},
+		}
+		return &response, err
+	}
+
+	// var userID string = c.Locals("userID").(string)
+	// machineId := c.Params("id")
+	// forceDelete := c.Query("force")
+
+	params := make(map[string]string)
+	if apiData.ForceDelete != "" {
+		params["force"] = apiData.ForceDelete
+	} else {
+		params = nil
+	}
+
+	log.Printf("machineId: %s", apiData.MachineID)
 	var response domain.HTTPResponse
-	if machineId != "" {
+	if apiData.MachineID == "" {
 		response = machineIdRequired()
 		return &response, nil
 	}
-	_, err := h.globalRoutines.FlyRequest("DELETE", fmt.Sprintf("%s/apps/%s/machines/%s", h.flyApiUrl, h.flyApp, machineId), nil, nil)
+	_, err = h.globalRoutines.FlyRequest("DELETE", fmt.Sprintf("%s/apps/%s/machines/%s", h.flyApiUrl, h.flyApp, apiData.MachineID), nil, nil, params)
 	if err != nil {
 		response = domain.HTTPResponse{
 			Code:    fiber.StatusInternalServerError,
 			Status:  "error",
-			Message: "Failed to delete the machine by id " + machineId,
+			Message: "Failed to delete the machine by id " + apiData.MachineID,
 			Errors:  domain.APIError{Code: "DeleteMachine by FlyRequest Failed", Message: err.Error()},
 			Data:    fiber.Map{"status": false},
 		}
 		return &response, err
 	}
+
+	// save machines's details and metadata to firestore db
+	/* err = h.firebaseRepo.DeleteMachine(userID, machineId)
+	if err != nil {
+		log.Printf("Firestore Error: %v", err)
+		response = domain.HTTPResponse{
+			// Headers: headers,
+			Code:    fiber.StatusInternalServerError,
+			Status:  "error",
+			Message: fmt.Sprintf("Failed to delete the machine %v from firestore ", machineId),
+			Errors:  domain.APIError{Code: "deleteMachine", Message: err.Error()},
+			Data:    fiber.Map{"status": false},
+		}
+		return &response, err
+	} */
+
 	response = domain.HTTPResponse{
 		Code:    fiber.StatusOK,
 		Status:  "success",
@@ -394,7 +607,7 @@ func (h *AuthHandler) ExecuteTask(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 
 	var listMachines []machines.Machine
 	listMachines, err = client.List(&machines.ListInput{
-		State: "running",
+		State: "started",
 	})
 
 	if err != nil {
@@ -427,7 +640,7 @@ func (h *AuthHandler) ExecuteTask(c *fiber.Ctx) (*domain.HTTPResponse, error) {
 
 	log.Println("Task URL:", taskUrl, MachineExecute)
 
-	data, err := h.globalRoutines.FlyRequest("POST", taskUrl, MachineExecute, map[string]string{"fly-replay": fmt.Sprintf("instance=%s", machineId)})
+	data, err := h.globalRoutines.FlyRequest("POST", taskUrl, MachineExecute, map[string]string{"fly-replay": fmt.Sprintf("instance=%s", machineId)}, nil)
 	if err != nil {
 		response = domain.HTTPResponse{
 			Code:    fiber.StatusInternalServerError,
@@ -625,8 +838,7 @@ func (h *AuthHandler) ParseImageHandler(c *fiber.Ctx) (*domain.HTTPResponse, err
 	log.Printf("Received imageName: %s\n", imageName)
 
 	// 4. URL-decode the imageName in case it contains special characters.
-	imageInput, err := url.QueryUnescape(imageName)
-
+	decodedImageName, err := h.globalRoutines.DecodeImageName(imageName)
 	if err != nil {
 		response = domain.HTTPResponse{
 			Code:    fiber.StatusBadRequest,
@@ -638,9 +850,6 @@ func (h *AuthHandler) ParseImageHandler(c *fiber.Ctx) (*domain.HTTPResponse, err
 
 		return &response, nil
 	}
-
-	// Remove any URL scheme if present
-	decodedImageName := h.globalRoutines.RemoveURLScheme(imageInput)
 
 	// 5. Parse the decoded image name using `name.ParseReference`.
 	ref, err := name.ParseReference(decodedImageName, name.WeakValidation) //Added WeakValidation

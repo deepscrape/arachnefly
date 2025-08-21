@@ -2,24 +2,23 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	firebase "firebase.google.com/go"
-	"firebase.google.com/go/auth"
+	"github.com/deepscrape/arachnefly/domain"
+	database "github.com/deepscrape/arachnefly/infrastructure/db"
 	router "github.com/deepscrape/arachnefly/interfaces/controller"
 	"github.com/deepscrape/arachnefly/interfaces/handlers"
+	"github.com/deepscrape/arachnefly/interfaces/repository"
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
-	"google.golang.org/api/option"
 )
 
 // Define a struct to hold the query parameters
@@ -28,8 +27,6 @@ type DeployQuery struct {
 	MasterID string `query:"master_id"`
 }
 
-var firebaseAuth *auth.Client
-var FirebaseApp *firebase.App
 var flyApiToken string
 var flyApp string
 var flyApiUrl = "https://api.machines.dev/v1"
@@ -37,7 +34,6 @@ var flyApiUrl = "https://api.machines.dev/v1"
 const addr = ":9090"
 
 func init() {
-	ctx := context.Background()
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("No .env file found, using system env variables")
@@ -45,57 +41,6 @@ func init() {
 
 	flyApiToken = os.Getenv("FLY_API_TOKEN")
 	flyApp = os.Getenv("FLY_APP")
-	flyFirebaseCreds, err := storeSecretFirebaseCredsAsFile()
-
-	if err != nil {
-		log.Fatalf("Error storing Firebase credentials: %v", err)
-	}
-	var options []option.ClientOption
-
-	options = append(options, option.WithCredentialsFile(flyFirebaseCreds))
-	FirebaseApp, err = firebase.NewApp(ctx, nil, options...)
-	if err != nil {
-		log.Fatalf("Firebase initialization error: %v", err)
-	}
-}
-
-func storeSecretFirebaseCredsAsFile() (string, error) {
-	// Get the secret from environment variables
-	encodedCreds := os.Getenv("FIREBASE_CREDENTIALS")
-	if encodedCreds == "" {
-		_, err := os.Open(os.Getenv("FILE_FIREBASE_CREDENTIALS"))
-		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Println("File does not exist")
-			} else {
-				log.Fatal(err)
-			}
-
-			fmt.Println("FIREBASE_CREDENTIALS not set")
-			return "", fmt.Errorf("FIREBASE_CREDENTIALS not set")
-		}
-
-		return os.Getenv("FILE_FIREBASE_CREDENTIALS"), nil
-	}
-
-	// Decode Base64
-	decoded, err := base64.StdEncoding.DecodeString(encodedCreds)
-	if err != nil {
-		fmt.Println("Error decoding Firebase credentials:", err)
-		return "", fmt.Errorf("Error decoding Firebase credentials: %v", err)
-	}
-
-	// Save as a JSON file
-	filePath := "/tmp/" + os.Getenv("FILE_FIREBASE_CREDENTIALS")
-	err = os.WriteFile(filePath, decoded, 0600)
-	if err != nil {
-		fmt.Println("Error writing Firebase credentials file:", err)
-		return "", fmt.Errorf("Error writing Firebase credentials file: %v", err)
-	}
-
-	fmt.Println("Firebase credentials saved at:", filePath)
-
-	return filePath, nil
 
 }
 
@@ -116,11 +61,27 @@ func main() {
 		Views:          engine,          // Set View Engine
 	})
 
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "https://localhost:4200, https://deepscrape.web.app, https://deepscrape.dev, http://localhost:5000, http://127.0.0.1:8081", //"https://arachnefly.com, https://www.arachnefly.com",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-CSRF-Token",                                              // "Content-Type, Accept, Authorization, X-Requested-With, X-CSRF-Token",
+		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowCredentials: true,
+	}))
+
+	FirebaseDBManager, err := initializeFirebaseManager( /* cfg, logger */ )
+	if err != nil {
+		log.Fatalf("Failed to create Firestore client: %v", err)
+	}
+	// defer FirebaseDBManager.Close()
+
+	// initialize Firestore repository
+	firestoreRepo := repository.NewFirestore(FirebaseDBManager, flyApiToken /* , cfg, logger */)
+
 	// Initialize Handlers
-	handler := handlers.NewHandlers(flyApiToken, flyApiUrl, flyApp)
+	authHandler := handlers.NewHandlers(firestoreRepo, flyApiToken, flyApiUrl, flyApp)
 
 	// Setup routes
-	router.SetupRoutes(app, handler, FirebaseApp)
+	router.SetupRoutes(app, authHandler, FirebaseDBManager.AuthClient())
 	// Setup Non-Accessible routes
 	router.SetupNonAccessibleRoutes(app)
 
@@ -173,4 +134,34 @@ func main() {
 
 	log.Println("Shutting metrics Server...")
 
+}
+
+func initializeFirebaseManager() (*database.FirebaseManager, error) {
+	var firebaseManager *database.FirebaseManager
+
+	opts := &domain.FirebaseManagerOpts{
+		CredsFile:    "",
+		DatabaseName: "easyscrape",   // cfg.DatabaseKeyspace,
+		ProjectID:    "libnet-d76db", // default project ID
+	}
+
+	// Check for Firestore emulator
+	emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST")
+	if emulatorHost != "" {
+		// When using emulator, credentials are not required
+		opts.CredsFile = "" // Ensure no creds file is used
+	}
+
+	var err error
+	for i := 0; i < 3; i++ {
+
+		firebaseManager, err = database.NewFirebaseClient(opts)
+		if err == nil {
+			break
+		}
+
+		// logger.Error("Failed to connect to Firestore, retrying... ", zap.Error(err))
+		time.Sleep(2 * time.Second)
+	}
+	return firebaseManager, err
 }

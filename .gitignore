@@ -51,3 +51,4 @@ fiber.log
 *.csv
 
 *.ssh
+*.schema.json

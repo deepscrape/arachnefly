@@ -1,13 +1,11 @@
 package controller
 
 import (
-	"context"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
-	firebase "firebase.google.com/go"
+	"firebase.google.com/go/v4/auth"
 	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/deepscrape/arachnefly/domain"
 	"github.com/deepscrape/arachnefly/interfaces/handlers"
@@ -23,14 +21,7 @@ func Welcome(c *fiber.Ctx) error {
 	return c.SendString("Welcome to the arachnefly API!")
 }
 
-func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, FirebaseApp *firebase.App) {
-
-	ctx := context.Background()
-
-	firebaseAuth, err := FirebaseApp.Auth(ctx)
-	if err != nil {
-		log.Fatalf("Firebase Auth initialization error: %v", err)
-	}
+func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, firebaseAuth *auth.Client) {
 
 	midlwrFireAuth := FireAuthMiddleware(firebaseAuth)
 
@@ -94,12 +85,14 @@ func SetupRoutes(app *fiber.App, fireAuthHandler *handlers.AuthHandler, Firebase
 	// LookupIP to get the machine IP
 	authedApp.Get("/machine/:id", MakeAPICallback(fireAuthHandler.GetMachine))
 	authedApp.Get("/machine/proxy/:id", MakeAPICallback(fireAuthHandler.HandleContainerProxyFiber))
+	authedApp.Get("/machine/waitforstate/:id", MakeAPICallback(fireAuthHandler.WaitForState))
 	authedApp.Get("/check-image", MakeAPICallback(fireAuthHandler.ParseImageHandler))
 
 	authedApp.Post("/deploy", MakeAPICallback(fireAuthHandler.DeployMachine))
 	authedApp.Post("/execute-task/:machine_id", MakeAPICallback(fireAuthHandler.ExecuteTask))
 
 	authedApp.Put("/machine/:id/start", MakeAPICallback(fireAuthHandler.StartMachine))
+	authedApp.Put("/machine/:id/suspend", MakeAPICallback(fireAuthHandler.SuspendMachine))
 	authedApp.Put("/machine/:id/stop", MakeAPICallback(fireAuthHandler.StopMachine))
 
 	authedApp.Delete("/machine/:id", MakeAPICallback(fireAuthHandler.DeleteMachine))
